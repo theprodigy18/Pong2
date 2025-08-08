@@ -1,0 +1,25 @@
+# Premake ecc.
+ecc/
+
+# Binary and obj.
+bin/
+bin-int/
+
+# Allow premake5 binary.
+!vendor/bin/
+
+# Clangd stuff and the cache.
+.clangd
+gencc.sh
+compile_commands*
+.cache/
+
+# VS Code stuff.
+.vscode/
+
+# Build system stuff.
+Makefile
+
+# Formatter.
+.clang-format
+
