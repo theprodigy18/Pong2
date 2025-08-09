@@ -64,6 +64,12 @@ PFNGLDELETESHADERPROC            glDeleteShader            = NULL;
 PFNGLDRAWELEMENTSINSTANCEDPROC   glDrawElementsInstanced   = NULL;
 PFNGLGENERATEMIPMAPPROC          glGenerateMipmap          = NULL;
 PFNGLDEBUGMESSAGECALLBACKPROC    glDebugMessageCallback    = NULL;
+PFNGLGENRENDERBUFFERSPROC        glGenRenderbuffers        = NULL;
+PFNGLBINDRENDERBUFFERPROC        glBindRenderbuffer        = NULL;
+PFNGLRENDERBUFFERSTORAGEPROC     glRenderbufferStorage     = NULL;
+PFNGLDELETERENDERBUFFERSPROC     glDeleteRenderbuffers     = NULL;
+PFNGLFRAMEBUFFERRENDERBUFFERPROC glFramebufferRenderbuffer = NULL;
+PFNGLBLITFRAMEBUFFERPROC         glBlitFramebuffer         = NULL;
 #pragma endregion
 
 void LoadOpenGLFunctions()
@@ -121,6 +127,12 @@ void LoadOpenGLFunctions()
     LOAD_GL_FUNCTION(PFNGLGENERATEMIPMAPPROC, glGenerateMipmap);
     LOAD_GL_FUNCTION(PFNGLDEBUGMESSAGECALLBACKPROC, glDebugMessageCallback);
     LOAD_GL_FUNCTION(PFNGLGENVERTEXARRAYSPROC, glGenVertexArrays);
+    LOAD_GL_FUNCTION(PFNGLGENRENDERBUFFERSPROC, glGenRenderbuffers)
+    LOAD_GL_FUNCTION(PFNGLBINDRENDERBUFFERPROC, glBindRenderbuffer)
+    LOAD_GL_FUNCTION(PFNGLRENDERBUFFERSTORAGEPROC, glRenderbufferStorage)
+    LOAD_GL_FUNCTION(PFNGLDELETERENDERBUFFERSPROC, glDeleteRenderbuffers)
+    LOAD_GL_FUNCTION(PFNGLFRAMEBUFFERRENDERBUFFERPROC, glFramebufferRenderbuffer)
+    LOAD_GL_FUNCTION(PFNGLBLITFRAMEBUFFERPROC, glBlitFramebuffer)
 }
 
 void CALLBACK GLDebugCallback(GLenum source, GLenum type, GLuint id,
@@ -261,7 +273,6 @@ bool DROP_CreateGraphics(const GfxInitProps* pProps, GfxHandle* pHandle)
         WGL_SWAP_METHOD_ARB, WGL_SWAP_COPY_ARB,
         WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB,
         WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB,
-        WGL_COLOR_BITS_ARB, 32,
         WGL_RED_BITS_ARB, 8,
         WGL_GREEN_BITS_ARB, 8,
         WGL_BLUE_BITS_ARB, 8,
@@ -320,6 +331,8 @@ bool DROP_CreateGraphics(const GfxInitProps* pProps, GfxHandle* pHandle)
 
     glEnable(GL_FRAMEBUFFER_SRGB);
 
+    wglMakeCurrent(NULL, NULL);
+
     GfxHandle handle = ALLOC(_GfxHandle, 1);
     ASSERT(handle);
 
@@ -361,4 +374,83 @@ void DROP_DestroyGraphics(GfxHandle* pHandle)
         s_gfxCount      = 0;
         s_isInitialized = false;
     }
+}
+
+bool DROP_CreateHDRFramebuffer(const GfxHandle gfxHandle, i32 width, i32 height, GfxFramebuffer* pFramebuffer)
+{
+    ASSERT_MSG(pFramebuffer, "Framebuffer is null.");
+
+    // Create hdr color texture.
+    GLuint hdrColor;
+    glGenTextures(1, &hdrColor);
+    glBindTexture(GL_TEXTURE_2D, hdrColor);
+    glTexImage2D(
+        GL_TEXTURE_2D, 0, GL_RGBA16F,
+        width, height, 0, GL_RGBA, GL_FLOAT, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    if (glGetError() != GL_NO_ERROR)
+    {
+        ASSERT_MSG(false, "Failed to create hdr color texture.");
+        glDeleteTextures(1, &hdrColor);
+        return false;
+    }
+
+    // Create depth buffer.
+    GLuint depthRBO;
+    glGenRenderbuffers(1, &depthRBO);
+    glBindRenderbuffer(GL_RENDERBUFFER, depthRBO);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width, height);
+
+    if (glGetError() != GL_NO_ERROR)
+    {
+        ASSERT_MSG(false, "Failed to create depth buffer.");
+        glDeleteRenderbuffers(1, &depthRBO);
+        glDeleteTextures(1, &hdrColor);
+        return false;
+    }
+
+    // Create FBO.
+    GLuint hdrFBO;
+    glGenFramebuffers(1, &hdrFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
+
+    glFramebufferTexture2D(
+        GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+        GL_TEXTURE_2D, hdrColor, 0);
+    glFramebufferRenderbuffer(
+        GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+        GL_RENDERBUFFER, depthRBO);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+    {
+        ASSERT_MSG(false, "Failed to create framebuffer.");
+        glDeleteRenderbuffers(1, &depthRBO);
+        glDeleteTextures(1, &hdrColor);
+        glDeleteFramebuffers(1, &hdrFBO);
+        return false;
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    pFramebuffer->colorTexture = hdrColor;
+    pFramebuffer->depthBuffer  = depthRBO;
+    pFramebuffer->framebuffer  = hdrFBO;
+
+    return true;
+}
+void DROP_DestroyFramebuffer(GfxFramebuffer* pFramebuffer)
+{
+    ASSERT_MSG(pFramebuffer, "Framebuffer is null.");
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glDeleteRenderbuffers(1, &pFramebuffer->depthBuffer);
+    glDeleteTextures(1, &pFramebuffer->colorTexture);
+    glDeleteFramebuffers(1, &pFramebuffer->framebuffer);
+
+    pFramebuffer->colorTexture = 0;
+    pFramebuffer->depthBuffer  = 0;
+    pFramebuffer->framebuffer  = 0;
 }

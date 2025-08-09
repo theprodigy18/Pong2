@@ -13,6 +13,14 @@ typedef signed long long i64;
 typedef float  f32;
 typedef double f64;
 
+#ifdef _MSC_VER
+#define ALIGN(x) __declspec(align(x))
+#elif defined(__GNUC__) || defined(__clang__)
+#define ALIGN(x) __attribute__((aligned(x)))
+#else
+#error "Compiler doens't support alignment."
+#endif // _MSC_VER
+
 #ifdef PLATFORM_WINDOWS
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -51,6 +59,8 @@ typedef double f64;
 #endif // DEBUG
 
 #define ZERO_MEMORY(ptr, count) memset(ptr, 0, sizeof(*ptr) * (count))
+#define MEM_COPY(dst, src, size) memcpy(dst, src, size)
+#define ARRAY_COUNT(arr) (sizeof(arr) / sizeof(arr[0]))
 
 #ifdef DEBUG
 #ifdef _MSC_VER

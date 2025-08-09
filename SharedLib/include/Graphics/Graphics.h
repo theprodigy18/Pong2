@@ -15,8 +15,18 @@ typedef struct _GfxInitProps
     WndHandle wndHandle;
 } GfxInitProps;
 
+typedef struct _GfxFramebuffer
+{
+    GLuint colorTexture;
+    GLuint depthBuffer;
+    GLuint framebuffer;
+} GfxFramebuffer;
+
 bool DROP_CreateGraphics(const GfxInitProps* pProps, GfxHandle* pHandle);
 void DROP_DestroyGraphics(GfxHandle* pHandle);
+
+bool DROP_CreateHDRFramebuffer(const GfxHandle gfxHandle, i32 width, i32 height, GfxFramebuffer* pFramebuffer);
+void DROP_DestroyFramebuffer(GfxFramebuffer* pFramebuffer);
 
 extern PFNGLCREATEPROGRAMPROC           glCreateProgram;
 extern PFNGLCREATESHADERPROC            glCreateShader;
@@ -67,3 +77,9 @@ extern PFNGLDELETESHADERPROC            glDeleteShader;
 extern PFNGLDRAWELEMENTSINSTANCEDPROC   glDrawElementsInstanced;
 extern PFNGLGENERATEMIPMAPPROC          glGenerateMipmap;
 extern PFNGLDEBUGMESSAGECALLBACKPROC    glDebugMessageCallback;
+extern PFNGLGENRENDERBUFFERSPROC        glGenRenderbuffers;
+extern PFNGLBINDRENDERBUFFERPROC        glBindRenderbuffer;
+extern PFNGLRENDERBUFFERSTORAGEPROC     glRenderbufferStorage;
+extern PFNGLDELETERENDERBUFFERSPROC     glDeleteRenderbuffers;
+extern PFNGLFRAMEBUFFERRENDERBUFFERPROC glFramebufferRenderbuffer;
+extern PFNGLBLITFRAMEBUFFERPROC         glBlitFramebuffer;
